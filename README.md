@@ -1,230 +1,158 @@
-# Multi-Agent Travel Planning System
+# Multi-Agent Travel Planning System (Demonstration)
 
 A sophisticated multi-agent system for comprehensive travel planning, leveraging LangChain and LangGraph to coordinate specialized AI agents for hotel bookings, flight arrangements, and destination guidance.
 
+> **⚠️ CURRENT STATUS: MOCK IMPLEMENTATION**
+>
+> Please be aware that this project is currently a **demonstration** of a multi-agent architecture. The core travel booking functionalities (flights and hotels) are **mocked**. The system **does not** connect to real-world APIs like Amadeus to search for or book flights and hotels. The code for a real Amadeus API client exists in the repository but is not currently integrated with the agents. See the "Future Development" section for details on how to connect it.
+
+## Architecture
+
+The system uses a central orchestrator built with LangGraph to manage the conversation and route user queries to the appropriate specialized agent.
+
+```
++-----------------+      +-----------------------+
+|                 |      |                       |
+|   Interactive   |----->|  TravelOrchestrator   |
+|      CLI        |      |      (LangGraph)      |
+|                 |      |                       |
++-----------------+      +-----------+-----------+
+                         |           |           |
+                         |           |           |
+           +-------------+           |           +-------------+
+           |                         |                         |
+           v                         v                         v
++-----------------+      +-----------------+      +-----------------+
+|                 |      |                 |      |                 |
+|   FlightAgent   |      |   HotelAgent    |      |    GuideAgent   |
+|    (Mocked)     |      |    (Mocked)     |      | (Partially RAG) |
+|                 |      |                 |      |                 |
++-----------------+      +-----------------+      +-----------------+
+```
+
 ## Features
 
-- **Specialized Travel Agents**: Dedicated agents for hotels, flights, and travel guidance
-- **Seamless Integration**: Coordinated workflow between agents for end-to-end travel planning
-- **Natural Language Interface**: Intuitive conversation-based interaction
-- **Extensible Architecture**: Easy to add new agents or customize existing ones
-- **RAG-Enhanced**: Utilizes Retrieval-Augmented Generation for accurate, up-to-date information
+-   **Multi-Agent Architecture**: Specialized agents for Flights, Hotels, and Travel Guidance, managed by a central orchestrator.
+-   **Keyword-Based Routing**: A simple but effective router in the orchestrator directs user queries to the correct agent.
+-   **Interactive CLI**: A user-friendly command-line interface built with Rich and Click for easy interaction.
+-   **RAG-Powered Guide Agent**: The `GuideAgent` uses a Retrieval-Augmented Generation (RAG) pipeline with a Chroma vector store and HuggingFace embeddings to answer questions about destinations. (Note: The current knowledge base is very small and hardcoded).
+-   **Extensible Design**: The agent-based architecture makes it easy to add new capabilities or connect existing agents to real-world tools.
 
-## Installation
+## Setup and Installation
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd windsurf-project
-   ```
+### 1. Prerequisites
 
-2. **Create and activate a virtual environment**:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+-   Python 3.9+
+-   Git
 
-3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. Clone the Repository
 
-## Setup
+```bash
+git clone <repository-url>
+cd <repository-directory>
+```
 
-### 1. OpenAI API Key
-You'll need an OpenAI API key to use the language models:
-- Sign up at [OpenAI](https://platform.openai.com/)
-- Generate an API key from your account settings
-- Set it as an environment variable:
-  ```bash
-  export OPENAI_API_KEY="your_api_key_here"
-  ```
-  Or add it to a `.env` file in the project root:
-  ```
-  OPENAI_API_KEY=your_api_key_here
-  ```
+### 3. Create a Virtual Environment
 
-### 2. Optional: Knowledge Base
-- The system will automatically create a knowledge base directory at `./data/knowledge_base`
-- You can add custom destination information by placing files in this directory
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-## Usage
+### 4. Install Dependencies
 
-### Command-Line Interface
+```bash
+pip install -r requirements.txt
+```
+
+### 5. Configure Environment Variables
+
+The application uses environment variables for API keys. Create a file named `.env` in the root of the project directory and add the following:
+
+```
+# For the default HuggingFace LLM
+HUGGINGFACEHUB_API_TOKEN="your_hf_api_token_here"
+
+# For connecting to the Amadeus API (see "Future Development")
+AMADEUS_API_KEY="your_amadeus_api_key_here"
+AMADEUS_API_SECRET="your_amadeus_api_secret_here"
+
+# Optional: For using OpenAI models instead of HuggingFace
+# OPENAI_API_KEY="your_openai_api_key_here"
+```
+
+-   You **must** provide a `HUGGINGFACEHUB_API_TOKEN` for the application to run with its default configuration. You can get one from the [Hugging Face Hub](https://huggingface.co/settings/tokens).
+-   The Amadeus keys are not used by default but are required if you wish to implement the real booking functionality.
+
+## How to Run
+
+Once you have completed the setup, run the interactive CLI from the project's root directory:
+
 ```bash
 python cli.py
 ```
 
-### Available Commands
-- Start an interactive session: `python cli.py`
-- Enable verbose logging: `python cli.py --verbose`
-- Use a custom config: `python cli.py --config /path/to/config.json`
+You can then start asking travel-related questions like:
+-   "Find me a flight from New York to London"
+-   "Find me a hotel in Paris"
+-   "Tell me about Tokyo"
 
-### Example Queries
-- "Find me a hotel in Paris for next weekend"
-- "What are the top attractions in Tokyo?"
-- "Book a flight from New York to London in July"
-- "Plan a 3-day trip to Rome including flights and hotels"
-- "What's the best time to visit Japan?"
+## How It Works
 
-## Architecture
+The application is built around a `TravelOrchestrator` that uses a state machine created with `langgraph`. When you enter a query:
 
-The system is built around a modular architecture with specialized agents:
+1.  The `cli.py` script captures your input.
+2.  It passes the query to the `TravelOrchestrator`.
+3.  The orchestrator's routing function inspects the query for keywords (e.g., "flight", "hotel", "attraction").
+4.  Based on the keywords, it routes the query to the corresponding agent (`FlightAgent`, `HotelAgent`, or `GuideAgent`).
+5.  The selected agent processes the query using its predefined tools (which are currently mocked for flights and hotels) and returns a response.
+6.  The response is displayed in the CLI.
 
-### Core Components
+## Future Development & How to Contribute
 
-- **`BaseAgent`**: Abstract base class for all agents
-- **`HotelAgent`**: Handles hotel searches and bookings
-- **`FlightAgent`**: Manages flight searches and reservations
-- **`GuideAgent`**: Provides destination information and recommendations
-- **`TravelOrchestrator`**: Coordinates between different agents
-- **`CLI`**: Command-line interface for user interaction
+This project is a great starting point. Here’s how you can contribute to making it fully functional:
 
-### Agent Capabilities
+### 1. Connect the Flight and Hotel Agents to the Amadeus API
 
-#### Hotel Agent
-- Search for hotels based on location, dates, and preferences
-- Book hotel rooms
-- Filter by amenities, price range, and ratings
+The `services/amadeus_client.py` file already contains a fully implemented client for the Amadeus API. The task is to integrate it into the agents.
 
-#### Flight Agent
-- Search for flights between locations
-- Check flight status
-- Book flights
-- Filter by price, airline, and number of stops
+-   **For the `FlightAgent`**:
+    1.  Open `agents/flight_agent.py`.
+    2.  In the `FlightSearchTool`, import the `AmadeusClient` and `FlightSearchParams`.
+    3.  In the `_run` method, replace the mock data generation with calls to `amadeus_client.search_flights(params)`.
+    4.  You will need to map the tool's input parameters to the `FlightSearchParams` data class.
 
-#### Guide Agent
-- Provide destination overviews
-- Suggest attractions and activities
-- Create customized itineraries
-- Offer local tips and recommendations
+-   **For the `HotelAgent`**:
+    1.  Open `agents/hotel_agent.py`.
+    2.  In the `HotelSearchTool`, import the `AmadeusClient` and `HotelSearchParams`.
+    3.  In the `_run` method, replace the mock data generation with calls to `amadeus_client.search_hotels(params)`.
+    4.  Map the tool's input parameters to the `HotelSearchParams` data class.
 
-## Configuration
+### 2. Expand the Guide Agent's Knowledge Base
 
-The system can be configured using a JSON configuration file. By default, it looks for `config.json` in the project root.
+The `GuideAgent`'s `DestinationInfoTool` currently uses a tiny, hardcoded list of cities. To make it more useful:
 
-### Example Config
-```json
-{
-  "llm": {
-    "model_name": "gpt-4",
-    "temperature": 0.2,
-    "max_tokens": 2000
-  },
-  "vector_store": {
-    "persist_directory": "./data/vector_store",
-    "collection_name": "travel_knowledge"
-  },
-  "knowledge_base": {
-    "path": "./data/knowledge_base"
-  }
-}
+1.  You can add more `Document` objects to the `_create_default_knowledge_base` method in `agents/guide_agent.py`.
+2.  A better approach would be to modify it to load documents from the `./data/knowledge_base` directory, which is what the original `README.md` intended. This would involve reading files (e.g., text or markdown files) from that directory and adding them to the Chroma vector store.
+
+### 3. Improve Agent Routing
+
+The current keyword-based router in `orchestrator.py` is simple. A more advanced implementation would use an LLM to decide which agent (or sequence of agents) is best suited to handle a complex query (e.g., "Plan a trip to Paris with a flight and hotel").
+
+## Project File Structure
+
 ```
-
-## Extending the System
-
-### Adding a New Agent
-1. Create a new class that inherits from `BaseAgent`
-2. Implement the required methods (`initialize_agent`, `process_query`)
-3. Add any agent-specific tools
-4. Register the agent in the `TravelOrchestrator`
-
-### Customizing Existing Agents
-- Override methods in the existing agent classes
-- Add new tools or modify existing ones
-- Update the agent's system message for different behavior
-
-## Dependencies
-
-- Python 3.9+
-- LangChain
-- LangGraph
-- OpenAI API access
-- ChromaDB (for vector storage)
-- Rich (for CLI formatting)
-- Python-dotenv (for environment variables)
-
-## Troubleshooting
-
-1. **API Key Issues**:
-   - Ensure your OpenAI API key is set correctly
-   - Check for typos in the environment variable name
-
-2. **Installation Problems**:
-   - Make sure you're using Python 3.9 or higher
-   - Try reinstalling the requirements: `pip install -r requirements.txt --force-reinstall`
-
-3. **Performance Issues**:
-   - Reduce the number of results or complexity of queries
-   - Use a smaller language model (e.g., gpt-3.5-turbo)
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built with [LangChain](https://python.langchain.com/) and [LangGraph](https://langchain-ai.github.io/langgraph/)
-- Uses [OpenAI](https://openai.com/) for language models
-- Inspired by modern AI agent architectures
-
-### Embedding Models
-- `sentence-transformers/all-MiniLM-L6-v2` (default, lightweight)
-- `sentence-transformers/all-mpnet-base-v2` (higher quality)
-- `sentence-transformers/all-distilroberta-v1` (balanced performance)
-
-### Language Models
-- `microsoft/DialoGPT-medium` (default)
-- Custom HuggingFace models supported
-
-### Search Parameters
-- **Chunk Size**: 256 tokens (default)
-- **Chunk Overlap**: 50 tokens (default)
-- **Retrieval Count**: 3-4 documents (configurable)
-- **Search Type**: MMR (Maximum Marginal Relevance)
-
-## Example Output
-
-The system provides detailed output including:
-- Document processing progress
-- Similarity search results with scores
-- Retrieved document content and metadata
-- Generated answers in formatted tables
-
-## Requirements
-
-- Python 3.8+
-- HuggingFace API token
-- PDF documents to search
-- Sufficient memory for embedding models (2GB+ recommended)
-
-## GPU Support
-
-For faster processing with CUDA-enabled GPUs:
-1. Uncomment GPU-related packages in `requirements.txt`
-2. Install PyTorch with CUDA support
-3. The system will automatically detect and use GPU acceleration
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Memory Errors**: Reduce chunk size or use smaller embedding models
-2. **API Token Issues**: Ensure your HuggingFace token is valid and has appropriate permissions
-3. **PDF Loading Errors**: Check PDF file integrity and permissions
-4. **Model Download Issues**: Ensure stable internet connection for initial model downloads
-
-### Performance Tips
-
-- Use GPU acceleration for large document collections
-- Adjust chunk size based on document complexity
-- Consider using smaller embedding models for faster processing
-- Implement caching for frequently accessed embeddings
-
-## Contributing
-
-Feel free to submit issues, feature requests, or pull requests to improve the semantic search pipeline.
-
-## License
-
-This project is open source and available under the MIT License.
+├── agents/
+│   ├── base_agent.py        # Abstract base class for all agents
+│   ├── flight_agent.py      # Mocked agent for flight queries
+│   ├── hotel_agent.py       # Mocked agent for hotel queries
+│   └── guide_agent.py       # Agent for destination info (partially RAG)
+├── services/
+│   └── amadeus_client.py    # (Currently Unused) Client for Amadeus API
+├── .gitignore
+├── cli.py                   # Main entry point for the interactive CLI
+├── config.py                # (Currently Unused) Configuration file
+├── orchestrator.py          # Coordinates the agents using LangGraph
+├── README.md                # This file
+└── requirements.txt         # Python dependencies
+```
