@@ -8,6 +8,7 @@ import json
 import random
 import string
 from .base_agent import BaseAgent, AgentResponse
+from services.amadeus_client import AmadeusClient, FlightSearchParams
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -28,88 +29,45 @@ class FlightSearchTool(BaseTool):
     """
     
     def _run(self, query: str) -> Dict[str, Any]:
-        # In a real implementation, this would call a flight API
-        # This is a mock implementation
+        """Performs a flight search using the Amadeus API."""
         try:
             params = json.loads(query)
-            origin = params.get('origin', 'XXX')
-            destination = params.get('destination', 'YYY')
-            departure_date = params.get('departure_date')
-            
-            # Generate mock flight data
-            mock_flights = self._generate_mock_flights(
-                origin, 
-                destination, 
-                departure_date,
-                is_return=False
-            )
-            
-            # For round trips
-            if 'return_date' in params:
-                return_flights = self._generate_mock_flights(
-                    destination,
-                    origin,
-                    params['return_date'],
-                    is_return=True
-                )
-                mock_flights.extend(return_flights)
-            
-            # Filter by cabin class if specified
-            if 'cabin_class' in params:
-                cabin = params['cabin_class'].lower()
-                mock_flights = [f for f in mock_flights if f['cabin_class'].lower() == cabin]
-            
-            # Filter by direct flights if specified
-            if params.get('direct_flights', False):
-                mock_flights = [f for f in mock_flights if f['stops'] == 0]
-            
-            return {
-                'flights': mock_flights[:10],  # Return top 10 results
-                'search_parameters': params
-            }
-            
         except json.JSONDecodeError:
-            return {'error': 'Invalid JSON input'}
-    
-    def _generate_mock_flights(self, origin: str, destination: str, 
-                             date_str: str, is_return: bool = False) -> List[Dict]:
-        """Generate mock flight data"""
-        flights = []
-        airlines = ['Delta', 'United', 'American', 'Lufthansa', 'Emirates', 'British Airways']
+            return {"error": "Invalid JSON input for flight search."}
+
+        try:
+            # Initialize the Amadeus client
+            amadeus_client = AmadeusClient()
+
+            # Map tool input to FlightSearchParams
+            search_params = FlightSearchParams(
+                origin=params.get('origin'),
+                destination=params.get('destination'),
+                departure_date=params.get('departure_date'),
+                return_date=params.get('return_date'),
+                adults=params.get('passengers', 1),  # Map passengers to adults
+                travel_class=params.get('cabin_class', 'ECONOMY').upper(),
+                non_stop=params.get('direct_flights', False)
+            )
+
+            # Perform the search
+            logger.info("Searching for flights with parameters: %s", search_params)
+            search_result = amadeus_client.search_flights(search_params)
+            
+            if "error" in search_result:
+                logger.error("Amadeus API returned an error: %s", search_result["error"])
+                return {"error": f"Failed to retrieve flight data: {search_result['error']}"}
+
+            return search_result
+
+        except ValueError as ve:
+            # This can happen if Amadeus API keys are not set
+            logger.error("Configuration error for Amadeus client: %s", ve)
+            return {"error": f"Configuration error: {ve}"}
+        except Exception as e:
+            logger.error("An unexpected error occurred during flight search: %s", e, exc_info=True)
+            return {"error": f"An unexpected error occurred: {e}"}
         
-        # Generate 3-5 mock flights
-        for i in range(random.randint(3, 5)):
-            # Generate random departure and arrival times
-            departure_hour = random.randint(6, 20)
-            flight_duration = random.randint(1, 12)  # 1-12 hours
-            
-            # Generate a random flight number
-            flight_number = f"{random.choice(airlines)[0]}{random.randint(100, 9999)}"
-            
-            # Generate a random price
-            base_price = random.randint(150, 1000)
-            
-            flights.append({
-                'flight_id': f"FL{random.randint(1000, 9999)}",
-                'airline': random.choice(airlines),
-                'flight_number': flight_number,
-                'origin': origin,
-                'destination': destination,
-                'departure_time': f"{date_str}T{departure_hour:02d}:00:00",
-                'arrival_time': f"{date_str}T{(departure_hour + flight_duration) % 24:02d}:00:00",
-                'duration': f"{flight_duration}h",
-                'price': base_price,
-                'currency': 'USD',
-                'cabin_class': random.choice(['economy', 'premium_economy', 'business', 'first']),
-                'stops': random.choice([0, 0, 0, 1, 1, 2]),  # Weighted towards direct flights
-                'refundable': random.choice([True, False]),
-                'baggage_allowance': random.choice(['1x23kg', '2x23kg', '2x32kg']),
-                'is_return': is_return
-            })
-        
-        # Sort by price
-        return sorted(flights, key=lambda x: x['price'])
-    
     async def _arun(self, query: str) -> Dict[str, Any]:
         # Async version of _run
         return self._run(query)
@@ -292,7 +250,7 @@ class FlightAgent(BaseAgent):
             Always confirm all details before finalizing a booking."""
         )
     
-    async def process_query(self, query: str, context: Optional[Dict] = None) -> AgentResponse:
+    async def process_query(self, query: str, context: Optional[Dict[str, Any]] = None) -> AgentResponse:
         try:
             if not self.workflow:
                 return self._format_response(
