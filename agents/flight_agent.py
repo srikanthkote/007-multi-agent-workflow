@@ -8,8 +8,9 @@ import json
 import random
 import string
 from .base_agent import BaseAgent, AgentResponse
-from services.amadeus_client import AmadeusClient, FlightSearchParams
+from services.amadeus_client import AmadeusClient, FlightSearchParams, FlightStatusParams
 import asyncio
+import re
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -131,42 +132,48 @@ class FlightStatusTool(BaseTool):
     """
     
     def _run(self, query: str) -> Dict[str, Any]:
-        # In a real implementation, this would call a flight status API
-        # This is a mock implementation
-        import json
-        from datetime import datetime
-        
+        """Checks flight status using the Amadeus API."""
         try:
             params = json.loads(query)
-            flight_number = params.get('flight_number', '').upper()
-            date_str = params.get('date', datetime.now().strftime('%Y-%m-%d'))
-            
-            # Generate a random status
-            statuses = [
-                'On Time', 'Delayed', 'Boarding', 'Departed', 'In Air',
-                'Landed', 'Cancelled', 'Diverted'
-            ]
-            status = random.choice(statuses)
-            
-            # Generate a random gate
-            gate = f"{random.choice(['A', 'B', 'C', 'D'])}{random.randint(1, 50)}"
-            
-            # Generate random departure/arrival times
-            departure_time = f"{random.randint(6, 22):02d}:{random.choice(['00', '15', '30', '45'])}"
-            arrival_time = f"{(int(departure_time[:2]) + random.randint(1, 6)) % 24:02d}:{random.choice(['00', '15', '30', '45'])}"
-            
-            return {
-                'flight_number': flight_number,
-                'date': date_str,
-                'status': status,
-                'departure_time': departure_time,
-                'arrival_time': arrival_time,
-                'gate': gate if status in ['Boarding', 'On Time', 'Delayed'] else None,
-                'terminal': random.randint(1, 5) if gate else None
-            }
-            
         except json.JSONDecodeError:
-            return {'error': 'Invalid JSON input'}
+            return {"error": "Invalid JSON input for flight status check."}
+
+        flight_number = params.get('flight_number')
+        date = params.get('date')
+
+        if not flight_number or not date:
+            return {"error": "Missing required parameters: flight_number and date."}
+
+        # Use regex to split carrier code and flight number
+        match = re.match(r"([A-Z]{2})([0-9]+)", flight_number.upper())
+        if not match:
+            return {"error": "Invalid flight number format. Expected format like 'AA123'."}
+
+        carrier_code, f_number = match.groups()
+
+        try:
+            amadeus_client = AmadeusClient()
+            status_params = FlightStatusParams(
+                carrier_code=carrier_code,
+                flight_number=f_number,
+                date=date
+            )
+            
+            logger.info("Checking flight status with parameters: %s", status_params)
+            status_result = amadeus_client.get_flight_status(status_params)
+            
+            if "error" in status_result:
+                logger.error("Amadeus API returned an error: %s", status_result["error"])
+                return {"error": f"Failed to retrieve flight status: {status_result['error']}"}
+
+            return status_result
+
+        except ValueError as ve:
+            logger.error("Configuration error for Amadeus client: %s", ve)
+            return {"error": f"Configuration error: {ve}"}
+        except Exception as e:
+            logger.error("An unexpected error occurred during flight status check: %s", e, exc_info=True)
+            return {"error": f"An unexpected error occurred: {e}"}
     
     async def _arun(self, query: str) -> Dict[str, Any]:
         # Async version of _run
