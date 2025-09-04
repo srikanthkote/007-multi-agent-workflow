@@ -40,6 +40,13 @@ class HotelSearchParams:
     price_range: Optional[str] = None
     rating: Optional[int] = None
 
+@dataclass
+class FlightStatusParams:
+    """Parameters for flight status check."""
+    carrier_code: str
+    flight_number: str
+    date: str
+
 class AmadeusClient:
     """Client for interacting with Amadeus Self-Service APIs."""
     
@@ -249,6 +256,49 @@ class AmadeusClient:
             parsed_offers.append(offer)
         
         return {'data': parsed_offers}
+
+    def get_flight_status(self, params: FlightStatusParams) -> Dict[str, Any]:
+        """Get flight status using Amadeus On-Demand Flight Status API."""
+        try:
+            response = self.client.schedule.flights.get(
+                carrierCode=params.carrier_code.upper(),
+                flightNumber=params.flight_number,
+                scheduledDepartureDate=params.date
+            )
+            return self._parse_flight_status(response.data)
+        except ResponseError as error:
+            logger.error(f"Amadeus API error: {error}")
+            return {"error": str(error), "status_code": error.status_code}
+        except Exception as e:
+            logger.error(f"Error getting flight status: {str(e)}", exc_info=True)
+            return {"error": str(e)}
+
+    def _parse_flight_status(self, data: List[Dict]) -> Dict[str, Any]:
+        """Parse flight status response into a more readable format."""
+        if not data:
+            return {"error": "Flight not found."}
+
+        status_info = data[0]
+        departure = status_info.get("departure", {})
+        arrival = status_info.get("arrival", {})
+
+        # Extract gate information from operational segments if available
+        gate = None
+        if "operationalFlightSegments" in status_info and status_info["operationalFlightSegments"]:
+            gate = status_info["operationalFlightSegments"][0].get("departure", {}).get("gate")
+
+        return {
+            "flight_number": f"{status_info.get('carrierCode', '')}{status_info.get('flightNumber', '')}",
+            "date": departure.get("scheduled", status_info.get("scheduledDepartureDate")),
+            "status": status_info.get("status", "Unknown"),
+            "departure_airport": departure.get("iataCode"),
+            "departure_time": departure.get("at"),
+            "departure_terminal": departure.get("terminal"),
+            "arrival_airport": arrival.get("iataCode"),
+            "arrival_time": arrival.get("at"),
+            "arrival_terminal": arrival.get("terminal"),
+            "gate": gate,
+        }
 
 # Example usage
 if __name__ == "__main__":
