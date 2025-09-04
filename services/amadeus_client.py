@@ -83,7 +83,7 @@ class AmadeusClient:
                 'adults': params.adults,
                 'children': params.children,
                 'travelClass': params.travel_class.upper(),
-                'nonStop': params.non_stop,
+                'nonStop': "false",
                 'max': 10  # Limit number of results
             }
             

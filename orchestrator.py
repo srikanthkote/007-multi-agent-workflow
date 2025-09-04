@@ -9,7 +9,7 @@ from langchain_core.runnables import RunnableConfig
 import logging
 
 from agents.hotel_agent import HotelAgent
-from agents.flight_agent import FlightAgent
+from agents.flight_agent import FlightAgent, FlightSearchTool, FlightBookingTool, FlightStatusTool
 from agents.guide_agent import GuideAgent
 from agents.base_agent import AgentResponse, AgentState
 
@@ -37,7 +37,8 @@ class TravelOrchestrator:
             name="FlightAgent",
             llm=llm, 
             vector_store=vector_store,
-            tools=[]  # Initialize with empty tools list
+            #tools=[FlightSearchTool(), FlightBookingTool(), FlightStatusTool()]
+            tools=[FlightSearchTool()]
         )
         self.hotel_agent = HotelAgent(
             name="HotelAgent",
@@ -285,6 +286,7 @@ class TravelOrchestrator:
             })
             
             # Execute the workflow
+
             result = await self.workflow.ainvoke(initial_state)
             #print("result: "+ str(result))
             # Get the final response

@@ -9,6 +9,7 @@ import random
 import string
 from .base_agent import BaseAgent, AgentResponse
 from services.amadeus_client import AmadeusClient, FlightSearchParams
+import asyncio
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ class FlightSearchTool(BaseTool):
             return {"error": f"An unexpected error occurred: {e}"}
         
     async def _arun(self, query: str) -> Dict[str, Any]:
+        logger.info("Searching for : %s", query)
         # Async version of _run
         return self._run(query)
 
@@ -325,120 +327,3 @@ class FlightAgent(BaseAgent):
                 error="An unexpected error occurred. Please try again later."
             )
 
-# Example usage:
-if __name__ == "__main__":
-    import os
-    from langchain_community.llms import HuggingFaceEndpoint
-    import asyncio
-    
-    async def test_flight_agent():
-        """Test the flight agent with mock responses"""
-        from dotenv import load_dotenv
-        from langchain_community.llms import FakeListLLM
-        import json
-        
-        # Load environment variables
-        load_dotenv()
-        
-        # Define mock responses for different queries
-        mock_responses = {
-            "Find me flights from New York to London on June 10, 2025": 
-                json.dumps({
-                    "action": "search_flights",
-                    "flights": [
-                        {"flight_number": "AA100", "departure": "08:00", "arrival": "20:00", "price": 1200, "airline": "American Airlines"},
-                        {"flight_number": "BA200", "departure": "14:00", "arrival": "02:00", "price": 1100, "airline": "British Airways"},
-                        {"flight_number": "DL300", "departure": "18:00", "arrival": "06:00", "price": 1150, "airline": "Delta"}
-                    ]
-                }),
-            "What's the status of flight AA123?": 
-                json.dumps({
-                    "action": "flight_status",
-                    "flight_number": "AA123",
-                    "status": "On Time",
-                    "departure": "08:00",
-                    "arrival": "10:00",
-                    "gate": "B12"
-                })
-        }
-        
-        # Create a custom FakeLLM that returns appropriate responses based on input
-        class CustomFakeLLM(FakeListLLM):
-            def _call(self, prompt: str, **kwargs):
-                # Find the most appropriate response based on the input
-                for query, response in mock_responses.items():
-                    if query.lower() in prompt.lower():
-                        return response
-                return "I'm sorry, I couldn't process that request."
-        
-        # Initialize the LLM with our custom responses
-        llm = CustomFakeLLM(responses=list(mock_responses.values()))
-        
-        # Create and initialize the flight agent
-        print("Initializing Flight Agent...")
-        agent = FlightAgent(llm=llm)
-        
-        def print_section(title):
-            print(f"\n{'='*60}\n{title.upper():^60}\n{'='*60}")
-        
-        def print_response(response):
-            if not response.success:
-                print(f"❌ Error: {response.error}")
-                return
-                
-            try:
-                #data = json.loads(response.data.get('output', '{}'))
-                data = response.data.get('response')
-                flightResponse = json.loads(data)
-
-                if flightResponse.get('action') == 'search_flights':
-                    print("\n✈️ Available Flights:")
-                    print("-" * 50)
-                    for flight in flightResponse.get('flights', []):
-                        print(f"{flight['airline']} {flight['flight_number']}")
-                        print(f"  🕒 {flight['departure']} - {flight['arrival']}")
-                        print(f"  💵 ${flight['price']}")
-                        print()
-                elif flightResponse.get('action') == 'flight_status':
-                    print(f"\nℹ️ Flight {flightResponse['flight_number']} Status:")
-                    print("-" * 50)
-                    print(f"Status: {flightResponse['status']}")
-                    print(f"Departure: {flightResponse['departure']}")
-                    print(f"Arrival: {flightResponse['arrival']}")
-                    print(f"Gate: {flightResponse['gate']}")
-                else:
-                    print(response.data.get('output', 'No data available'))
-            except (json.JSONDecodeError, AttributeError):
-                print(response.data.get('output', 'No data available'))
-            except Exception as e:
-                print(f"\n❌ Test failed with error: {str(e)}")
-                import traceback
-                traceback.print_exc()
-            
-        try:
-            # Test 1: Flight Search
-            print_section("Test 1: Flight Search")
-            search_query = "Find me flights from New York to London on June 10, 2025"
-            print(f"Query: {search_query}")
-            
-            search_response = await agent.process_query(search_query)
-            print_response(search_response)
-            
-            # Test 2: Flight Status
-            print_section("Test 2: Flight Status")
-            status_query = "What's the status of flight AA123?"
-            print(f"Query: {status_query}")
-            
-            status_response = await agent.process_query(status_query)
-            print_response(status_response)
-            
-            print_section("Test Complete")
-            
-        except Exception as e:
-            print(f"\n❌ Test failed with error: {str(e)}")
-            import traceback
-            traceback.print_exc()
-
-# Run the test
-if __name__ == "__main__":
-    asyncio.run(test_flight_agent())
