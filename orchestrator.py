@@ -38,7 +38,7 @@ class TravelOrchestrator:
             llm=llm, 
             vector_store=vector_store,
             #tools=[FlightSearchTool(), FlightBookingTool(), FlightStatusTool()]
-            tools=[FlightSearchTool()]
+            tools=[FlightSearchTool(), FlightStatusTool()]
         )
         self.hotel_agent = HotelAgent(
             name="HotelAgent",
